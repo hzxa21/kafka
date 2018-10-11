@@ -84,6 +84,10 @@ class ControllerContext {
   def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
 
+  def getBrokerById(brokerId: Int): Option[Broker] = {
+    liveBrokersUnderlying.find(_.id == brokerId)
+  }
+
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionReplicaAssignmentUnderlying.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.filter {

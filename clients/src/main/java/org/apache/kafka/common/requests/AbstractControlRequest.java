@@ -18,17 +18,15 @@ public abstract class AbstractControlRequest extends AbstractRequest {
     public static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
         protected final int controllerId;
         protected final int controllerEpoch;
-        protected long brokerEpoch = UNKNOWN_BROKER_EPOCH;
+        protected final long brokerEpoch;
 
-        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch) {
+        protected Builder(ApiKeys api, short version, int controllerId, int controllerEpoch, long brokerEpoch) {
             super(api, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
-        }
-
-        public void setBrokerEpoch(long brokerEpoch) {
             this.brokerEpoch = brokerEpoch;
         }
+
     }
 
     public int controllerId() {
