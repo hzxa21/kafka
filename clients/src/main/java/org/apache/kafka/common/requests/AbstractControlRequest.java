@@ -4,17 +4,18 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
 public abstract class AbstractControlRequest extends AbstractRequest {
+    public static final long UNKNOWN_BROKER_EPOCH = -1L;
+
     protected static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     protected static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
     protected static final String BROKER_EPOCH_KEY_NAME = "broker_epoch";
 
-    protected static final long UNKNOWN_BROKER_EPOCH = -1L;
 
     protected final int controllerId;
     protected final int controllerEpoch;
     protected final long brokerEpoch;
 
-    protected static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
+    public static abstract class Builder<T extends AbstractRequest> extends AbstractRequest.Builder<T> {
         protected final int controllerId;
         protected final int controllerEpoch;
         protected long brokerEpoch = UNKNOWN_BROKER_EPOCH;
@@ -51,7 +52,7 @@ public abstract class AbstractControlRequest extends AbstractRequest {
         super(api, version);
         this.controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
         this.controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
-        this.brokerEpoch = struct.getInt(BROKER_EPOCH_KEY_NAME);
+        this.brokerEpoch = struct.hasField(BROKER_EPOCH_KEY_NAME) ? struct.getInt(BROKER_EPOCH_KEY_NAME) : UNKNOWN_BROKER_EPOCH;
     }
 
 

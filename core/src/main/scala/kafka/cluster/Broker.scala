@@ -20,6 +20,7 @@ package kafka.cluster
 import kafka.common.BrokerEndPointNotAvailableException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.requests.AbstractControlRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 /**
@@ -27,7 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
  * A broker has an id, a collection of end-points, an optional rack and a listener to security protocol map.
  * Each end-point is (host, port, listenerName).
  */
-case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
+case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], generation: Long = AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
 
   private val endPointsMap = endPoints.map { endPoint =>
     endPoint.listenerName -> endPoint
