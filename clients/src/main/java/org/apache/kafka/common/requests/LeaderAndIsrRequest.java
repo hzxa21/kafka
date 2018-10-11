@@ -36,13 +36,10 @@ import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
-import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.protocol.types.Type.*;
 
-public class LeaderAndIsrRequest extends AbstractRequest {
-    private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
-    private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
+public class LeaderAndIsrRequest extends AbstractControlRequest {
+    private static final String TOPIC_STATES_KEY_NAME = "topic_states";
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
     private static final String LIVE_LEADERS_KEY_NAME = "live_leaders";
 
@@ -82,6 +79,19 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
             new Field(IS_NEW_KEY_NAME, BOOLEAN, "Whether the replica should have existed on the broker or not"));
 
+    private static final Schema LEADER_AND_ISR_REQUEST_PARTITION_STATE_V2 = new Schema(
+            PARTITION_ID,
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(LEADER_KEY_NAME, INT32, "The broker id for the leader."),
+            new Field(LEADER_EPOCH_KEY_NAME, INT32, "The leader epoch."),
+            new Field(ISR_KEY_NAME, new ArrayOf(INT32), "The in sync replica ids."),
+            new Field(ZK_VERSION_KEY_NAME, INT32, "The ZK version."),
+            new Field(REPLICAS_KEY_NAME, new ArrayOf(INT32), "The replica ids."),
+            new Field(IS_NEW_KEY_NAME, BOOLEAN, "Whether the replica should have existed on the broker or not"));
+
+    private static final Schema LEADER_AND_ISR_REQUEST_TOPIC_STATE_V0 = new Schema(TOPIC_NAME,
+            new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V2)));
+
     private static final Schema LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0 = new Schema(
             new Field(END_POINT_ID_KEY_NAME, INT32, "The broker id."),
             new Field(HOST_KEY_NAME, STRING, "The hostname of the broker."),
@@ -101,28 +111,31 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             new Field(PARTITION_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1)),
             new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
+    private static final Schema LEADER_AND_ISR_REQUEST_V2 = new Schema(
+            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
+            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
+            new Field(BROKER_EPOCH_KEY_NAME, INT64, "The broker epoch"),
+            new Field(TOPIC_STATES_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_TOPIC_STATE_V0)),
+            new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1};
+        return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1, LEADER_AND_ISR_REQUEST_PARTITION_STATE_V2};
     }
 
-    public static class Builder extends AbstractRequest.Builder<LeaderAndIsrRequest> {
-        private final int controllerId;
-        private final int controllerEpoch;
+    public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
         private final Map<TopicPartition, PartitionState> partitionStates;
         private final Set<Node> liveLeaders;
 
         public Builder(short version, int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version);
-            this.controllerId = controllerId;
-            this.controllerEpoch = controllerEpoch;
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch);
             this.partitionStates = partitionStates;
             this.liveLeaders = liveLeaders;
         }
 
         @Override
         public LeaderAndIsrRequest build(short version) {
-            return new LeaderAndIsrRequest(controllerId, controllerEpoch, partitionStates, liveLeaders, version);
+            return new LeaderAndIsrRequest(controllerId, controllerEpoch, brokerEpoch, partitionStates, liveLeaders, version);
         }
 
         @Override
@@ -131,6 +144,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             bld.append("(type=LeaderAndIsRequest")
                 .append(", controllerId=").append(controllerId)
                 .append(", controllerEpoch=").append(controllerEpoch)
+                .append(", brokerEpoch=").append(brokerEpoch)
                 .append(", partitionStates=").append(partitionStates)
                 .append(", liveLeaders=(").append(Utils.join(liveLeaders, ", ")).append(")")
                 .append(")");
@@ -138,22 +152,18 @@ public class LeaderAndIsrRequest extends AbstractRequest {
         }
     }
 
-    private final int controllerId;
-    private final int controllerEpoch;
     private final Map<TopicPartition, PartitionState> partitionStates;
     private final Set<Node> liveLeaders;
 
-    private LeaderAndIsrRequest(int controllerId, int controllerEpoch, Map<TopicPartition, PartitionState> partitionStates,
+    private LeaderAndIsrRequest(int controllerId, int controllerEpoch, long brokerEpoch, Map<TopicPartition, PartitionState> partitionStates,
                                 Set<Node> liveLeaders, short version) {
-        super(ApiKeys.LEADER_AND_ISR, version);
-        this.controllerId = controllerId;
-        this.controllerEpoch = controllerEpoch;
+        super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
         this.partitionStates = partitionStates;
         this.liveLeaders = liveLeaders;
     }
 
     public LeaderAndIsrRequest(Struct struct, short version) {
-        super(ApiKeys.LEADER_AND_ISR, version);
+        super(ApiKeys.LEADER_AND_ISR, struct, version);
 
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
@@ -190,8 +200,6 @@ public class LeaderAndIsrRequest extends AbstractRequest {
             leaders.add(new Node(id, host, port));
         }
 
-        controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
-        controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
         this.partitionStates = partitionStates;
         this.liveLeaders = leaders;
     }
