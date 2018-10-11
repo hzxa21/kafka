@@ -1695,13 +1695,19 @@ object KafkaZkClient {
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 
-
-  private def controllerZkVersionCheck(version: Int): Option[ZkVersionCheck] = {
-    if (version < KafkaController.InitialControllerEpochZkVersion)
-      None
+  private def wrapZkOpWithControllerZkVersionCheck(zkOp: ZkOp, expectedControllerZkVersion: Int): Seq[ZkOp] = {
+    if (expectedControllerZkVersion < KafkaController.InitialControllerEpoch)
+      Seq(zkOp)
     else
-      Some(ZkVersionCheck(ControllerEpochZNode.path, version))
+      Seq(CheckOp(ControllerEpochZNode.path, expectedControllerZkVersion), zkOp)
   }
+
+//  private def controllerZkVersionCheck(version: Int): Option[ZkVersionCheck] = {
+//    if (version < KafkaController.InitialControllerEpochZkVersion)
+//      None
+//    else
+//      Some(ZkVersionCheck(ControllerEpochZNode.path, version))
+//  }
 
   private def maybeThrowControllerMoveException(response: AsyncResponse): Unit = {
     response.zkVersionCheckResult match {

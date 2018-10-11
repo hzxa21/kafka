@@ -158,10 +158,10 @@ class ZooKeeperClient(connectString: String,
       responseQueue.asScala.toBuffer
     }
   }
-  
-  def createTransaction(): Transaction = {
-    zooKeeper.transaction()
-  }
+
+//  def createTransaction(): Transaction = {
+//    zooKeeper.transaction()
+//  }
 
   // Visibility to override for testing
   private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
@@ -202,7 +202,7 @@ class ZooKeeperClient(connectString: String,
                 case c: CreateResult => c.getPath
                 case _ => null
               }
-              callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs), 
+              callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs),
                 Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
             }}, ctx.orNull)
       case SetDataRequest(path, data, version, ctx, zkVersionCheck) =>
@@ -219,7 +219,7 @@ class ZooKeeperClient(connectString: String,
                 case s: SetDataResult => s.getStat
                 case _ => null
               }
-              callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs), 
+              callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs),
                 Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
             }}, ctx.orNull)
       case DeleteRequest(path, version, ctx, zkVersionCheck) =>
@@ -232,7 +232,7 @@ class ZooKeeperClient(connectString: String,
           zooKeeper.multi(Seq(zkVersionCheck.get.checkOp, Op.delete(path, version)).asJava, new MultiCallback {
             override def processResult(rc: Int, multiOpPath: String, ctx: scala.Any, opResults: util.List[OpResult]): Unit = {
               val (zkVersionCheckOpResult, _) = (opResults.get(0), opResults.get(1))
-              callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs), 
+              callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs),
                 Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
             }}, ctx.orNull)
       case GetAclRequest(path, ctx, _) =>
@@ -245,6 +245,12 @@ class ZooKeeperClient(connectString: String,
         zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
             callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case MultiRequest(zkOps, ctx, _) =>
+        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, new MultiCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]): Unit = {
+            callback(MultiResponse(Code.get(rc), path, Option(ctx), opResults.asScala, responseMetadata(sendTimeMs)))
+          }
         }, ctx.orNull)
     }
   }
@@ -477,6 +483,23 @@ trait ZNodeChildChangeHandler {
   def handleChildChange(): Unit = {}
 }
 
+sealed trait ZkOp {
+  def toZookeeperOp: Op
+}
+
+case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
+  override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
+}
+case class DeleteOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.delete(path, version)
+}
+case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.setData(path, data, version)
+}
+case class CheckOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.check(path, version)
+}
+
 sealed trait AsyncRequest {
   /**
    * This type member allows us to define methods that take requests and return responses with the correct types.
@@ -527,6 +550,12 @@ case class GetChildrenRequest(path: String, ctx: Option[Any] = None, zkVersionCh
   type Response = GetChildrenResponse
 }
 
+case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+  type Response = MultiResponse
+
+  override def path: String = null
+}
+
 
 sealed abstract class AsyncResponse {
   def resultCode: Code
@@ -569,6 +598,8 @@ case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat
                           metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
                                metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], opResults: Seq[OpResult],
+                         metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
 
 class ZooKeeperClientException(message: String) extends RuntimeException(message)
 class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)
