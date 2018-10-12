@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
@@ -121,7 +120,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             new Field(LIVE_LEADERS_KEY_NAME, new ArrayOf(LEADER_AND_ISR_REQUEST_LIVE_LEADER_V0)));
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1, LEADER_AND_ISR_REQUEST_PARTITION_STATE_V2};
+        return new Schema[]{LEADER_AND_ISR_REQUEST_V0, LEADER_AND_ISR_REQUEST_V1, LEADER_AND_ISR_REQUEST_V2};
     }
 
     public static class Builder extends AbstractControlRequest.Builder<LeaderAndIsrRequest> {
@@ -308,7 +307,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             this.isNew = isNew;
         }
 
-        public PartitionState(Struct struct) {
+        private PartitionState(Struct struct) {
             int controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
             int leader = struct.getInt(LEADER_KEY_NAME);
             int leaderEpoch = struct.getInt(LEADER_EPOCH_KEY_NAME);
