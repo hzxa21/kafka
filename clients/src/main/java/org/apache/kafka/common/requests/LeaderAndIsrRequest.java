@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
@@ -210,14 +211,8 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         struct.set(BROKER_EPOCH_KEY_NAME, brokerEpoch);
 
         if (struct.hasField(TOPIC_STATES_KEY_NAME)) {
-            Map<String, Map<Integer, PartitionState>> topicStates = new HashMap<>();
-            for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
-                TopicPartition tp = entry.getKey();
-                PartitionState state = entry.getValue();
-                Map<Integer, PartitionState> states = topicStates.getOrDefault(tp.topic(), new HashMap<>());
-                states.put(tp.partition(), state);
-            }
-            List<Struct> topicStatesData = new ArrayList<>(partitionStates.size());
+            Map<String, Map<Integer, PartitionState>> topicStates = CollectionUtils.groupPartitionDataByTopic(partitionStates);
+            List<Struct> topicStatesData = new ArrayList<>(topicStates.size());
             for (Map.Entry<String, Map<Integer, PartitionState>> entry : topicStates.entrySet()) {
                 Struct topicStateData = struct.instance(TOPIC_STATES_KEY_NAME);
                 topicStateData.set(TOPIC_NAME, entry.getKey());
@@ -230,6 +225,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                     partitionStatesData.add(partitionStateData);
                 }
                 topicStateData.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
+                topicStatesData.add(topicStateData);
             }
             struct.set(TOPIC_STATES_KEY_NAME, topicStatesData);
         } else {
