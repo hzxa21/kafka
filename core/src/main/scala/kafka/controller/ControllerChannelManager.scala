@@ -431,7 +431,6 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
         else 0
 
-      val updateMetadataRequest = {
         val liveBrokers = if (updateMetadataRequestVersion == 0) {
           // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
           controllerContext.liveOrShuttingDownBrokers.map { broker =>
@@ -449,15 +448,18 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
             new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
           }
         }
-        new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, partitionStates.asJava,
-          liveBrokers.asJava)
-      }
 
       updateMetadataRequestBrokerSet.foreach { broker =>
+        val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
+          controllerContext.getBrokerById(broker).get.generation, partitionStates.asJava, liveBrokers.asJava)
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA, updateMetadataRequest, null)
       }
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
+
+      val stopReplicaRequestVersion: Short =
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
+        else 0
 
       stopReplicaRequestMap.foreach { case (broker, replicaInfoList) =>
         val stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet
@@ -469,13 +471,14 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
         // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
         // changes the order in which the requests are sent for the same partitions, but that's OK.
-        val stopReplicaRequest = new StopReplicaRequest.Builder(controllerId, controllerEpoch, false,
+        val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch,
+          controllerContext.getBrokerById(broker).get.generation, false,
           replicasToGroup.map(_.replica.topicPartition).toSet.asJava)
         controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
 
         replicasToNotGroup.foreach { r =>
-          val stopReplicaRequest = new StopReplicaRequest.Builder(
-              controllerId, controllerEpoch, r.deletePartition,
+          val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion,
+              controllerId, controllerEpoch, controllerContext.getBrokerById(broker).get.generation, r.deletePartition,
               Set(r.replica.topicPartition).asJava)
           controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
         }

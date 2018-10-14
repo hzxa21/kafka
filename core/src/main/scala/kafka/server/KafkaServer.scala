@@ -141,6 +141,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   var metadataCache: MetadataCache = null
   var quotaManagers: QuotaFactory.QuotaManagers = null
 
+  var brokerEpochCache: BrokerEpochCache = null
+
   private var _zkClient: KafkaZkClient = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
@@ -238,6 +240,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         logManager.startup()
 
         metadataCache = new MetadataCache(config.brokerId)
+        brokerEpochCache = new BrokerEpochCache(config.brokerId)
         // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
         // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
@@ -254,7 +257,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager.startup()
 
         val brokerInfo = createBrokerInfo
-        zkClient.registerBroker(brokerInfo)
+        val brokerEpoch = zkClient.registerBroker(brokerInfo)
+        brokerEpochCache.updateBrokerEpoch(brokerEpoch)
 
         // Now that the broker id is successfully registered, checkpoint it
         checkpointBrokerId(config.brokerId)
@@ -264,7 +268,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         tokenManager.startup()
 
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, tokenManager, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, tokenManager, brokerEpochCache, threadNamePrefix)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
@@ -339,7 +343,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel)
+      brokerTopicStats, metadataCache, logDirFailureChannel, brokerEpochCache)
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")

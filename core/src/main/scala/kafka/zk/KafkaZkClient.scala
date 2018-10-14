@@ -28,20 +28,20 @@ import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
+import kafka.zookeeper
 import kafka.zookeeper._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.zookeeper.KeeperException.{BadVersionException, Code, ConnectionLossException, NodeExistsException}
+import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
-import scala.collection.JavaConverters._
 
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
@@ -82,10 +82,11 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     createResponse.name
   }
 
-  def registerBroker(brokerInfo: BrokerInfo): Unit = {
+  def registerBroker(brokerInfo: BrokerInfo): Long = {
     val path = brokerInfo.path
-    checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
-    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}")
+    val stat = checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid: ${stat.getCzxid}")
+    stat.getCzxid
   }
 
   /**
@@ -1616,43 +1617,48 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     responses
   }
 
-  private def checkedEphemeralCreate(path: String, data: Array[Byte]): Unit = {
+  private def checkedEphemeralCreate(path: String, data: Array[Byte]): Stat = {
     val checkedEphemeral = new CheckedEphemeral(path, data)
     info(s"Creating $path (is it secure? $isSecure)")
-    val code = checkedEphemeral.create()
-    info(s"Result of znode creation at $path is: $code")
-    if (code != Code.OK)
-      throw KeeperException.create(code)
+    val stat = checkedEphemeral.create()
+    info(s"Stat of the created znode at $path is: $stat")
+    stat
   }
 
   private class CheckedEphemeral(path: String, data: Array[Byte]) extends Logging {
-    def create(): Code = {
-      val createRequest = CreateRequest(path, data, acls(path), CreateMode.EPHEMERAL)
-      val createResponse = retryRequestUntilConnected(createRequest)
-      createResponse.resultCode match {
-        case code@ Code.OK => code
+    def create(): Stat = {
+      val response = retryRequestUntilConnected(
+        MultiRequest(Seq(
+          CreateOp(path, null, acls(path), CreateMode.EPHEMERAL),
+          SetDataOp(path, data, 0)))
+      )
+      response.resultCode match {
+        case Code.OK =>
+          val setDataResult = response.zkOpResults(1).rawOpResult.asInstanceOf[SetDataResult]
+          setDataResult.getStat
         case Code.NODEEXISTS => getAfterNodeExists()
         case code =>
           error(s"Error while creating ephemeral at $path with return code: $code")
-          code
+          throw KeeperException.create(code)
       }
     }
 
-    private def getAfterNodeExists(): Code = {
+    private def getAfterNodeExists(): Stat = {
       val getDataRequest = GetDataRequest(path)
       val getDataResponse = retryRequestUntilConnected(getDataRequest)
       getDataResponse.resultCode match {
         case Code.OK if getDataResponse.stat.getEphemeralOwner != zooKeeperClient.sessionId =>
           error(s"Error while creating ephemeral at $path, node already exists and owner " +
             s"'${getDataResponse.stat.getEphemeralOwner}' does not match current session '${zooKeeperClient.sessionId}'")
-          Code.NODEEXISTS
-        case code@ Code.OK => code
+          throw KeeperException.create(Code.NODEEXISTS)
+        case Code.OK =>
+          getDataResponse.stat
         case Code.NONODE =>
           info(s"The ephemeral node at $path went away while reading it, attempting create() again")
           create()
         case code =>
           error(s"Error while creating ephemeral at $path as it already exists and error getting the node data due to $code")
-          code
+          throw KeeperException.create(code)
       }
     }
   }

@@ -61,7 +61,7 @@ object KafkaController extends Logging {
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
-                      tokenManager: DelegationTokenManager, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                      tokenManager: DelegationTokenManager, brokerEpochCache: BrokerEpochCache, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
@@ -1512,7 +1512,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state: ControllerState = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      zkClient.registerBroker(brokerInfo)
+      val brokerEpoch = zkClient.registerBroker(brokerInfo)
+      brokerEpochCache.updateBrokerEpoch(brokerEpoch)
       Reelect.process()
     }
   }
