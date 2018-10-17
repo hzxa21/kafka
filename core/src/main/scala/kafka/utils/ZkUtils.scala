@@ -622,14 +622,14 @@ class ZkUtils(val zkClient: ZkClient,
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
     for (node <- nodes) {
-      val brokerZKString = readData(BrokerIdsPath + "/" + node)._1
-      cluster.add(parseBrokerJson(node.toInt, brokerZKString))
+      val (brokerZKString, stat) = readData(BrokerIdsPath + "/" + node)
+      cluster.add(parseBrokerJson(node.toInt, brokerZKString, stat))
     }
     cluster
   }
 
-  private def parseBrokerJson(id: Int, jsonString: String): Broker = {
-    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8)).broker
+  private def parseBrokerJson(id: Int, jsonString: String, stat: Stat): Broker = {
+    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8), stat).broker
   }
 
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
@@ -755,8 +755,9 @@ class ZkUtils(val zkClient: ZkClient,
    * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(brokerId: Int): Option[Broker] = {
-    readDataMaybeNull(BrokerIdsPath + "/" + brokerId)._1 match {
-      case Some(brokerInfo) => Some(parseBrokerJson(brokerId, brokerInfo))
+    val (dataOpt, stat) = readDataMaybeNull(BrokerIdsPath + "/" + brokerId)
+    dataOpt match {
+      case Some(brokerInfo) => Some(parseBrokerJson(brokerId, brokerInfo, stat))
       case None => None
     }
   }

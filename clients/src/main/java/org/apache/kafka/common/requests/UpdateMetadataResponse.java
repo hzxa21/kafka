@@ -42,6 +42,7 @@ public class UpdateMetadataResponse extends AbstractResponse {
      * Possible error code:
      *
      * STALE_CONTROLLER_EPOCH (11)
+     * STALE_BROKER_EPOCH (76)
      */
     private final Errors error;
 

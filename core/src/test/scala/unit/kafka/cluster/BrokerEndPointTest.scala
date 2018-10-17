@@ -23,6 +23,7 @@ import kafka.utils.TestUtils
 import kafka.zk.BrokerIdZNode
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.zookeeper.data.Stat
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNull}
 import org.junit.Test
 

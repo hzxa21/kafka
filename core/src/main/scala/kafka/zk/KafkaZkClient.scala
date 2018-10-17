@@ -20,7 +20,7 @@ import java.util.Properties
 
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, EpochAwareBroker}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -385,7 +385,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Gets all brokers in the cluster.
    * @return sequence of brokers in the cluster.
    */
-  def getAllBrokersInCluster: Seq[Broker] = {
+  def getAllBrokersInCluster: Seq[EpochAwareBroker] = {
     val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
@@ -393,7 +393,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
       getDataResponse.resultCode match {
         case Code.OK =>
-          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
+          Option(EpochAwareBroker(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
@@ -404,12 +404,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     * Get a broker from ZK
     * @return an optional Broker
     */
-  def getBroker(brokerId: Int): Option[Broker] = {
+  def getBroker(brokerId: Int): Option[EpochAwareBroker] = {
     val getDataRequest = GetDataRequest(BrokerIdZNode.path(brokerId))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK =>
-        Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
+        Option(EpochAwareBroker(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
       case Code.NONODE => None
       case _ => throw getDataResponse.resultException.get
     }

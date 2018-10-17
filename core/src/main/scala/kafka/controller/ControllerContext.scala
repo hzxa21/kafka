@@ -37,7 +37,7 @@ class ControllerContext {
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
-  private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
+  private val liveBrokerEpochsCache: mutable.Map[Int, Long] = mutable.Map.empty
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topicPartition.topic, mutable.Map.empty)
@@ -74,18 +74,18 @@ class ControllerContext {
   // setter
   def liveBrokers_=(brokers: Set[Broker]) {
     liveBrokersUnderlying = brokers
-    liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
+//    brokers.foreach(broker => liveBrokerEpochsCache.remove(broker.id))
   }
 
   // getter
   def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveBrokerIdsUnderlying -- shuttingDownBrokerIds
+  def liveBrokerIds = liveOrShuttingDownBrokerIds -- shuttingDownBrokerIds
 
-  def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
+  def liveOrShuttingDownBrokerIds = liveBrokerEpochsCache.keySet
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
 
-  def getBrokerById(brokerId: Int): Option[Broker] = {
-    liveBrokersUnderlying.find(_.id == brokerId)
+  def getBrokerEpochById(brokerId: Int): Option[Long] = {
+    liveBrokerEpochsCache.get(brokerId)
   }
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
