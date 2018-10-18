@@ -20,7 +20,7 @@ import java.util.Properties
 
 import com.yammer.metrics.core.MetricName
 import kafka.api.LeaderAndIsr
-import kafka.cluster.{Broker, EpochAwareBroker}
+import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
@@ -28,7 +28,6 @@ import kafka.security.auth.SimpleAclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
-import kafka.zookeeper
 import kafka.zookeeper._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.resource.PatternType

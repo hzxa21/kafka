@@ -629,7 +629,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   private def parseBrokerJson(id: Int, jsonString: String, stat: Stat): Broker = {
-    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8), stat).broker
+    BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8)).broker
   }
 
   def getPartitionLeaderAndIsrForTopics(topicAndPartitions: Set[TopicAndPartition]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {

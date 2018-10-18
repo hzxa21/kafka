@@ -142,7 +142,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val brokerTopicStats: BrokerTopicStats,
                      val metadataCache: MetadataCache,
                      logDirFailureChannel: LogDirFailureChannel,
-                     brokerEpochCache: BrokerEpoch,
+                     brokerEpoch: BrokerEpoch,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
@@ -159,10 +159,10 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           brokerEpochCache: BrokerEpoch,
+           brokerEpoch: BrokerEpoch,
            threadNamePrefix: Option[String] = None) {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
-      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, brokerEpochCache,
+      quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel, brokerEpoch,
       DelayedOperationPurgatory[DelayedProduce](
         purgatoryName = "Produce", brokerId = config.brokerId,
         purgeInterval = config.producerPurgatoryPurgeIntervalRequests),
@@ -371,7 +371,7 @@ class ReplicaManager(val config: KafkaConfig,
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)
       } else {
         if (stopReplicaRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-          val curBrokerEpoch = brokerEpochCache.get
+          val curBrokerEpoch = brokerEpoch.get
           if (stopReplicaRequest.brokerEpoch() < curBrokerEpoch) {
             stateChangeLogger.warn("Received stop replica request from an old broker epoch " +
               s"${stopReplicaRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch")
@@ -1006,7 +1006,7 @@ class ReplicaManager(val config: KafkaConfig,
         throw new ControllerMovedException(stateChangeLogger.messageWithPrefix(stateControllerEpochErrorMessage))
       } else {
         if (updateMetadataRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-          val curBrokerEpoch = brokerEpochCache.get
+          val curBrokerEpoch = brokerEpoch.get
           if (updateMetadataRequest.brokerEpoch() < curBrokerEpoch) {
             val stateBrokerEpochErrorMessage = "Received update metadata request from an old broker epoch " +
               s"${updateMetadataRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch"
@@ -1037,7 +1037,7 @@ class ReplicaManager(val config: KafkaConfig,
         leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_CONTROLLER_EPOCH.exception)
       } else {
         if (leaderAndIsrRequest.brokerEpoch() != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-          val curBrokerEpoch = brokerEpochCache.get
+          val curBrokerEpoch = brokerEpoch.get
           if (leaderAndIsrRequest.brokerEpoch() < curBrokerEpoch) {
             stateChangeLogger.warn("Received LeaderAndIsr request from an old broker epoch " +
               s"${leaderAndIsrRequest.brokerEpoch()}. Current broker epoch is $curBrokerEpoch")

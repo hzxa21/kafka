@@ -40,7 +40,11 @@ import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.*;
+import static org.apache.kafka.common.protocol.types.Type.INT16;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class UpdateMetadataRequest extends AbstractControlRequest {
     private static final String TOPIC_STATES_KEY_NAME = "topic_states";
@@ -408,7 +412,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         Struct struct = new Struct(ApiKeys.UPDATE_METADATA.requestSchema(version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(BROKER_EPOCH_KEY_NAME, brokerEpoch);
+        struct.setIfExists(BROKER_EPOCH_KEY_NAME, brokerEpoch);
 
         if (struct.hasField(TOPIC_STATES_KEY_NAME)) {
             Map<String, Map<Integer, PartitionState>> topicStates = CollectionUtils.groupPartitionDataByTopic(partitionStates);
@@ -427,7 +431,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
                 topicStateData.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
                 topicStatesData.add(topicStateData);
             }
-            struct.set(TOPIC_STATES_KEY_NAME, topicStatesData);
+            struct.set(TOPIC_STATES_KEY_NAME, topicStatesData.toArray());
         } else {
             List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
             for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
@@ -478,7 +482,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
-        if (versionId <= 4)
+        if (versionId <= 5)
             return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

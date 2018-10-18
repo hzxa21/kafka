@@ -147,6 +147,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new StopReplicaResponse(error, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -172,7 +173,7 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(BROKER_EPOCH_KEY_NAME, brokerEpoch);
+        struct.setIfExists(BROKER_EPOCH_KEY_NAME, brokerEpoch);
         struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
 
         if (struct.hasField(TOPICS_KEY_NAME)) { // V1

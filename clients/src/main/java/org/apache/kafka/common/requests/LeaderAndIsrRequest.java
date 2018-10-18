@@ -37,7 +37,10 @@ import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.*;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.INT64;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class LeaderAndIsrRequest extends AbstractControlRequest {
     private static final String TOPIC_STATES_KEY_NAME = "topic_states";
@@ -207,7 +210,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         Struct struct = new Struct(ApiKeys.LEADER_AND_ISR.requestSchema(version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(BROKER_EPOCH_KEY_NAME, brokerEpoch);
+        struct.setIfExists(BROKER_EPOCH_KEY_NAME, brokerEpoch);
 
         if (struct.hasField(TOPIC_STATES_KEY_NAME)) {
             Map<String, Map<Integer, PartitionState>> topicStates = CollectionUtils.groupPartitionDataByTopic(partitionStates);
@@ -226,7 +229,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 topicStateData.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
                 topicStatesData.add(topicStateData);
             }
-            struct.set(TOPIC_STATES_KEY_NAME, topicStatesData);
+            struct.set(TOPIC_STATES_KEY_NAME, topicStatesData.toArray());
         } else {
             List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
             for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
@@ -265,6 +268,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         switch (versionId) {
             case 0:
             case 1:
+            case 2:
                 return new LeaderAndIsrResponse(error, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

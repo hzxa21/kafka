@@ -40,7 +40,6 @@ class ControllerContext {
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
-  private val brokerEpochsCache: mutable.Map[Int, Long] = mutable.Map.empty
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topicPartition.topic, mutable.Map.empty)
