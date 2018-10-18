@@ -1239,25 +1239,44 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      val curBrokers = zkClient.getAllBrokersInCluster.toSet
+      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+      val curBrokerIdAndEpochMap = curBrokerAndEpochs.map(e => (e._1.id, e._2)).toMap
+      val curBrokers = curBrokerAndEpochs.map(_._1).toSet
       val curBrokerIds = curBrokers.map(_.id)
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+      val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
+        .filter(bid => curBrokerIdAndEpochMap(bid) > controllerContext.brokerEpochsCache(bid))
       val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+      val bouncedBrokers = curBrokers.filter(broker => bouncedBrokerIds(broker.id))
       controllerContext.liveBrokers = curBrokers
       val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
       val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
       val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
+      val bouncedBrokerIdsSorted = bouncedBrokerIds.toSeq.sorted
       info(s"Newly added brokers: ${newBrokerIdsSorted.mkString(",")}, " +
-        s"deleted brokers: ${deadBrokerIdsSorted.mkString(",")}, all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
+        s"deleted brokers: ${deadBrokerIdsSorted.mkString(",")}, " +
+        s"bounced brokers: ${bouncedBrokerIdsSorted.mkString(",")}, " +
+        s"all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
 
       newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+      bouncedBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+      bouncedBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
       deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-      if (newBrokerIds.nonEmpty)
+      if (newBrokerIds.nonEmpty) {
+        newBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
         onBrokerStartup(newBrokerIdsSorted)
-      if (deadBrokerIds.nonEmpty)
+      }
+      if (bouncedBrokerIds.nonEmpty) {
+        onBrokerFailure(bouncedBrokerIdsSorted)
+        bouncedBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        onBrokerStartup(bouncedBrokerIdsSorted)
+      }
+      if (deadBrokerIds.nonEmpty) {
+        deadBrokerIds.foreach(controllerContext.brokerEpochsCache.remove)
         onBrokerFailure(deadBrokerIdsSorted)
+      }
     }
   }
 

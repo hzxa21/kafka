@@ -385,7 +385,7 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
    * Gets all brokers in the cluster.
    * @return sequence of brokers in the cluster.
    */
-  def getAllBrokersInCluster: Seq[EpochAwareBroker] = {
+  def getAllBrokersInCluster: Seq[Broker] = {
     val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
@@ -393,7 +393,26 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
       val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
       getDataResponse.resultCode match {
         case Code.OK =>
-          Option(EpochAwareBroker(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
+          Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
+        case Code.NONODE => None
+        case _ => throw getDataResponse.resultException.get
+      }
+    }
+  }
+
+  /**
+    * Gets all brokers with broker epoch in the cluster.
+    * @return sequence of brokers in the cluster.
+    */
+  def getAllBrokerAndEpochsInCluster: Seq[(Broker, Long)] = {
+    val brokerIds = getSortedBrokerList
+    val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
+    val getDataResponses = retryRequestsUntilConnected(getDataRequests)
+    getDataResponses.flatMap { getDataResponse =>
+      val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
+      getDataResponse.resultCode match {
+        case Code.OK =>
+          Option((BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
@@ -404,12 +423,12 @@ class KafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean
     * Get a broker from ZK
     * @return an optional Broker
     */
-  def getBroker(brokerId: Int): Option[EpochAwareBroker] = {
+  def getBroker(brokerId: Int): Option[Broker] = {
     val getDataRequest = GetDataRequest(BrokerIdZNode.path(brokerId))
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
       case Code.OK =>
-        Option(EpochAwareBroker(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
+        Option(BrokerIdZNode.decode(brokerId, getDataResponse.data).broker)
       case Code.NONODE => None
       case _ => throw getDataResponse.resultException.get
     }

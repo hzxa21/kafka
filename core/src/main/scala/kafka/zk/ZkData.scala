@@ -33,6 +33,7 @@ import kafka.utils.Json
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.requests.AbstractControlRequest
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}

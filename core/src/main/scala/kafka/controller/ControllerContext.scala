@@ -19,6 +19,7 @@ package kafka.controller
 
 import kafka.cluster.Broker
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.AbstractControlRequest
 
 import scala.collection.{Seq, Set, mutable}
 
@@ -35,9 +36,11 @@ class ControllerContext {
   val partitionLeadershipInfo: mutable.Map[TopicPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty
   val partitionsBeingReassigned: mutable.Map[TopicPartition, ReassignedPartitionsContext] = mutable.Map.empty
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
+  val brokerEpochsCache: mutable.Map[Int, Long] = mutable.Map.empty
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
-  private val liveBrokerEpochsCache: mutable.Map[Int, Long] = mutable.Map.empty
+  private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
+  private val brokerEpochsCache: mutable.Map[Int, Long] = mutable.Map.empty
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topicPartition.topic, mutable.Map.empty)
@@ -74,19 +77,15 @@ class ControllerContext {
   // setter
   def liveBrokers_=(brokers: Set[Broker]) {
     liveBrokersUnderlying = brokers
-//    brokers.foreach(broker => liveBrokerEpochsCache.remove(broker.id))
+    liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
   }
 
   // getter
   def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveOrShuttingDownBrokerIds -- shuttingDownBrokerIds
+  def liveBrokerIds = liveBrokerIdsUnderlying -- shuttingDownBrokerIds
 
-  def liveOrShuttingDownBrokerIds = liveBrokerEpochsCache.keySet
+  def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
-
-  def getBrokerEpochById(brokerId: Int): Option[Long] = {
-    liveBrokerEpochsCache.get(brokerId)
-  }
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionReplicaAssignmentUnderlying.flatMap {
