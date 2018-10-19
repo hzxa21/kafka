@@ -633,7 +633,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def initializeControllerContext() {
     // update controller cache with delete topic information
-    controllerContext.liveBrokers = zkClient.getAllBrokersInCluster.toSet
+    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
+    controllerContext.liveBrokers = curBrokerAndEpochs.map(_._1).toSet
+    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochsCache(e._1.id) =  e._2)
+    println("Init")
+    controllerContext.brokerEpochsCache.foreach(e => println(e))
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
@@ -1266,17 +1270,25 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
       if (newBrokerIds.nonEmpty) {
         newBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        println("new brokers")
+        controllerContext.brokerEpochsCache.foreach(e => println(e))
         onBrokerStartup(newBrokerIdsSorted)
       }
       if (bouncedBrokerIds.nonEmpty) {
         onBrokerFailure(bouncedBrokerIdsSorted)
         bouncedBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        println("bounced brokers")
+        controllerContext.brokerEpochsCache.foreach(e => println(e))
         onBrokerStartup(bouncedBrokerIdsSorted)
       }
       if (deadBrokerIds.nonEmpty) {
-        deadBrokerIds.foreach(controllerContext.brokerEpochsCache.remove)
         onBrokerFailure(deadBrokerIdsSorted)
+        deadBrokerIds.foreach(controllerContext.brokerEpochsCache.remove)
+        println("dead brokers")
+        controllerContext.brokerEpochsCache.foreach(e => println(e))
       }
+
+      println("finish")
     }
   }
 

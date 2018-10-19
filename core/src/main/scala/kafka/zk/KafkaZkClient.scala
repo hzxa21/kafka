@@ -1741,6 +1741,7 @@ object KafkaZkClient {
                   else if (errorCode != Code.OK)
                     throw KeeperException.create(errorCode, checkOp.path)
                 }
+              case _ =>
             }
             val rawOpResult = zkOpResult.rawOpResult
             zkOpResult.zkOp match {

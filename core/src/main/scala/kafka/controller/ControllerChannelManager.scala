@@ -397,7 +397,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerEpoch)
 
       val leaderAndIsrRequestVersion: Short =
-        if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
         else 0
 
       leaderAndIsrRequestMap.foreach { case (broker, leaderAndIsrPartitionStates) =>
@@ -425,7 +426,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
       val partitionStates = Map.empty ++ updateMetadataRequestPartitionInfoMap
       val updateMetadataRequestVersion: Short =
-        if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
