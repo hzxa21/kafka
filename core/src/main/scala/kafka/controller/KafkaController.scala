@@ -278,6 +278,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         period = config.delegationTokenExpiryCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
+
+    println("Init finishes")
   }
 
   private def scheduleAutoLeaderRebalanceTask(delay: Long, unit: TimeUnit): Unit = {
